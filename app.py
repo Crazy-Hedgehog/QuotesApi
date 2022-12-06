@@ -5,11 +5,6 @@ import random
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 
-about_me = {
-   'name': 'Евгений',
-   'surname': 'Юрченко',
-   'email': 'eyurchenko@specialist.ru'
-}
 
 quotes = [
    {
@@ -35,6 +30,21 @@ quotes = [
 
 ]
 
+# Вспомогательный код, чтобы ручками не править
+for quote in quotes:
+    quote['rating'] = 1
+
+
+def add_edit_rating(quote):
+    rating = quote['rating'] if 'rating' in quote.keys() else 1
+    quote['rating'] = rating if 0 < rating < 6 and 'rating' in quote.keys() else 1
+    return quote
+
+
+def find_quote_by_id(quote_id):
+    for quote in quotes:
+        if quote['id'] == quote_id:
+            return quote
 
 
 @app.route('/quotes')
@@ -42,22 +52,13 @@ def get_quotes():
    return quotes
 
 
-@app.route('/about')
-def about():
-   return about_me
+@app.route('/quotes/<int:quote_id>', methods=['GET'])
+def get_quote_by_id(quote_id):
+    quote = find_quote_by_id(quote_id)
+    if quote:
+        return quote, 200
+    return f'Quote with id={quote_id} not found', 404
 
-
-@app.route('/')
-def hello_world():
-   return 'Hello, World!'
-
-
-@app.route('/quotes/<int:quote_id>')
-def find_quote(quote_id):
-   for quote in quotes:
-      if quote['id'] == quote_id:
-         return quote
-   return f'Quote with id={quote_id} not found', 404
 
 
 @app.route('/quotes/count')
@@ -76,22 +77,49 @@ def create_quote():
     data = request.json
     new_quote = data
     new_quote['id'] = quotes[-1]['id'] + 1
+    add_edit_rating(new_quote)
     quotes.append(new_quote)
     return new_quote, 201
 
 
+@app.route('/quotes/<int:quote_id>', methods=['PUT'])
+def edit_quote(quote_id):
+    new_data = request.json
+    quote = find_quote_by_id(quote_id)
+    if quote:
+        for key, value in new_data.items():
+            quote[key] = new_data[key]
+        add_edit_rating(quote)
+        return quote, 200
+    return f'Quote with id={quote_id} not found', 404
+
+
+@app.route("/quotes/<int:quote_id>", methods=['DELETE'])
+def delete(quote_id):
+    quote = find_quote_by_id(quote_id)
+    if quote:
+        quotes.remove(quote)
+        return f"Quote with id {quote_id} is deleted.", 200
+    return f'Quote with id={quote_id} not found.', 404
+
+
+@app.route('/search', methods=['GET'])
+def search():
+    args = request.args
+    args.to_dict()
+    search_quotes = []
+    for quote in quotes:
+        i = len(args)
+        for key, value in args.items():
+            if key == 'rating':
+                value = int(value)
+            if quote[key] != value:
+                break
+            if i == 1 and quote[key] == value:
+                search_quotes.append(quote)
+            i -= 1
+    return search_quotes
+
+
 if __name__ == '__main__':
    app.run(debug=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
