@@ -1,10 +1,38 @@
 from flask import Flask
 from flask import request
 import random
-import sqlite3
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+
+
+quotes = [
+   {
+       'id': 3,
+       'author': 'Rick Cook',
+       'text': 'Программирование сегодня — это гонка разработчиков программ, стремящихся писать программы с большей и лучшей идиотоустойчивостью, и вселенной, которая пытается создать больше отборных идиотов. Пока вселенная побеждает.'
+   },
+   {
+       'id': 5,
+       'author': 'Waldi Ravens',
+       'text': 'Программирование на С похоже на быстрые танцы на только что отполированном полу людей с острыми бритвами в руках.'
+   },
+   {
+       'id': 6,
+       'author': 'Mosher’s Law of Software Engineering',
+       'text': 'Не волнуйтесь, если что-то не работает. Если бы всё работало, вас бы уволили.'
+   },
+   {
+       'id': 8,
+       'author': 'Yoggi Berra',
+       'text': 'В теории, теория и практика неразделимы. На практике это не так.'
+   },
+
+]
+
+# Вспомогательный код, чтобы ручками не править
+for quote in quotes:
+    quote['rating'] = 1
 
 
 def add_edit_rating(quote):
@@ -21,50 +49,23 @@ def find_quote_by_id(quote_id):
 
 @app.route('/quotes')
 def get_quotes():
-    select_quotes = "SELECT * from quotes"
-    connection = sqlite3.connect("test.db")
-    cursor = connection.cursor()
-    cursor.execute(select_quotes)
-    values = cursor.fetchall()
-    keys = ['id', 'author', 'text']
-    quotes = []
-    for value in values:
-        quote = dict(zip(keys, value))
-        quotes.append(quote)
-    cursor.close()
-    connection.close()
-    return quotes, 200
+   return quotes
 
 
 @app.route('/quotes/<int:quote_id>', methods=['GET'])
 def get_quote_by_id(quote_id):
-    select_quotes = f"SELECT * from quotes WHERE id = {quote_id}"
-    connection = sqlite3.connect("test.db")
-    cursor = connection.cursor()
-    cursor.execute(select_quotes)
-    values = cursor.fetchone()
-    if values:
-        keys = ['id', 'author', 'text']
-        quote = dict(zip(keys, values))
-        cursor.close()
-        connection.close()
+    quote = find_quote_by_id(quote_id)
+    if quote:
         return quote, 200
     return f'Quote with id={quote_id} not found', 404
 
 
-@app.route('/quotes/count', methods=['GET'])
-def quotes_counter():
-    select_quotes = f"SELECT COUNT(*) as counter from quotes"
-    connection = sqlite3.connect("test.db")
-    cursor = connection.cursor()
-    cursor.execute(select_quotes)
-    value = cursor.fetchone()
-    key = ['count']
-    counter = dict(zip(key, value))
-    cursor.close()
-    connection.close()
-    return counter, 200
 
+@app.route('/quotes/count')
+def quotes_counter():
+   return {
+            'count': len(quotes)
+   }
 
 @app.route('/quotes/random')
 def get_random_quote():
