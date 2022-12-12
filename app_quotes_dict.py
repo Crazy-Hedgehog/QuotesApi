@@ -103,7 +103,7 @@ def delete(quote_id):
     return f'Quote with id={quote_id} not found.', 404
 
 
-@app.route('/search', methods=['GET'])
+@app.route('/quotes/search', methods=['GET'])
 def search():
     args = request.args
     args.to_dict()

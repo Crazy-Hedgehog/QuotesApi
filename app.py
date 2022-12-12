@@ -1,123 +1,125 @@
-from flask import Flask
-from flask import request
-import random
+from flask import Flask, request, g
 import sqlite3
+from pathlib import Path
+
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
+BASE_DIR = Path(__file__).parent
+DATABASE = BASE_DIR / "test.db"
 
 
-def add_edit_rating(quote):
-    rating = quote['rating'] if 'rating' in quote.keys() else 1
-    quote['rating'] = rating if 0 < rating < 6 and 'rating' in quote.keys() else 1
-    return quote
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+    return db
+
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 
 
 def find_quote_by_id(quote_id):
-    for quote in quotes:
-        if quote['id'] == quote_id:
-            return quote
+    select_quotes = f"SELECT * from quotes WHERE id = ?"
+    cursor = get_db().cursor()
+    cursor.execute(select_quotes, (quote_id,))
+    value = cursor.fetchone()
+    return value
+
+
+def to_dict(values):
+    keys = ['id', 'author', 'text']
+    return dict(zip(keys, values))
 
 
 @app.route('/quotes')
 def get_quotes():
     select_quotes = "SELECT * from quotes"
-    connection = sqlite3.connect("test.db")
-    cursor = connection.cursor()
+    cursor = get_db().cursor()
     cursor.execute(select_quotes)
     values = cursor.fetchall()
-    keys = ['id', 'author', 'text']
     quotes = []
     for value in values:
-        quote = dict(zip(keys, value))
+        quote = to_dict(value)
         quotes.append(quote)
-    cursor.close()
-    connection.close()
     return quotes, 200
 
 
 @app.route('/quotes/<int:quote_id>', methods=['GET'])
 def get_quote_by_id(quote_id):
-    select_quotes = f"SELECT * from quotes WHERE id = {quote_id}"
-    connection = sqlite3.connect("test.db")
-    cursor = connection.cursor()
-    cursor.execute(select_quotes)
-    values = cursor.fetchone()
-    if values:
-        keys = ['id', 'author', 'text']
-        quote = dict(zip(keys, values))
-        cursor.close()
-        connection.close()
-        return quote, 200
+    quote = find_quote_by_id(quote_id)
+    if quote is not None:
+        return to_dict(quote), 200
     return f'Quote with id={quote_id} not found', 404
 
 
 @app.route('/quotes/count', methods=['GET'])
 def quotes_counter():
     select_quotes = f"SELECT COUNT(*) as counter from quotes"
-    connection = sqlite3.connect("test.db")
-    cursor = connection.cursor()
+    cursor = get_db().cursor()
     cursor.execute(select_quotes)
     value = cursor.fetchone()
     key = ['count']
     counter = dict(zip(key, value))
-    cursor.close()
-    connection.close()
     return counter, 200
 
 
-@app.route('/quotes/random')
+@app.route('/quotes/random', methods=['GET'])
 def get_random_quote():
-   return random.choice(quotes)
+    select_quotes = f"SELECT * from quotes ORDER BY random() LIMIT 1"
+    cursor = get_db().cursor()
+    cursor.execute(select_quotes)
+    quote = cursor.fetchone()
+    quote = to_dict(quote)
+    return quote, 200
 
 
 @app.route('/quotes', methods=['POST'])
 def create_quote():
     data = request.json
+    create_quote = "INSERT INTO quotes (author,text) VALUES (?, ?)"
+    connection = get_db()
+    cursor = connection.cursor()
+    cursor.execute(create_quote, (data["author"], data["text"]))
+    connection.commit()
     new_quote = data
-    new_quote['id'] = quotes[-1]['id'] + 1
-    add_edit_rating(new_quote)
-    quotes.append(new_quote)
+    new_quote["id"] = cursor.lastrowid
     return new_quote, 201
 
 
 @app.route('/quotes/<int:quote_id>', methods=['PUT'])
 def edit_quote(quote_id):
     new_data = request.json
-    quote = find_quote_by_id(quote_id)
-    if quote:
-        for key, value in new_data.items():
-            quote[key] = new_data[key]
-        add_edit_rating(quote)
-        return quote, 200
+    connection = get_db()
+    cursor = connection.cursor()
+    for key in new_data.keys():
+        update_quote = f"""
+        UPDATE quotes 
+        SET {key} = ?
+        WHERE id = ? ;
+        """
+        cursor.execute(update_quote, (new_data[key], quote_id))
+    connection.commit()
+    if cursor.rowcount != 0:
+        new_quote = find_quote_by_id(quote_id)
+        return to_dict(new_quote), 200
     return f'Quote with id={quote_id} not found', 404
 
 
 @app.route("/quotes/<int:quote_id>", methods=['DELETE'])
 def delete(quote_id):
-    quote = find_quote_by_id(quote_id)
-    if quote:
-        quotes.remove(quote)
+    delete_quote = "DELETE FROM quotes WHERE id = ?"
+    connection = get_db()
+    cursor = connection.cursor()
+    cursor.execute(delete_quote, (quote_id,))
+    connection.commit()
+    if cursor.rowcount != 0:
         return f"Quote with id {quote_id} is deleted.", 200
     return f'Quote with id={quote_id} not found.', 404
-
-
-@app.route('/search', methods=['GET'])
-def search():
-    args = request.args
-    args.to_dict()
-    search_quotes = []
-    for quote in quotes:
-        i = len(args)
-        for key, value in args.items():
-            if key == 'rating':
-                value = int(value)
-            if quote[key] != value:
-                break
-            if i == 1 and quote[key] == value:
-                search_quotes.append(quote)
-            i -= 1
-    return search_quotes
 
 
 if __name__ == '__main__':
