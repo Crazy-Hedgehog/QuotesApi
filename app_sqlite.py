@@ -1,30 +1,26 @@
 from flask import Flask, request, g
+import sqlite3
 from pathlib import Path
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
 
-BASE_DIR = Path(__file__).parent
-DATABASE = BASE_DIR / "main.db"
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR / 'main.db'}"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.app_context().push()
-
-db = SQLAlchemy(app)
-migrate = Migrate(app, db)
+BASE_DIR = Path(__file__).parent
+DATABASE = BASE_DIR / "test.db"
 
 
-class QuoteModel(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    author = db.Column(db.String(32), unique=False)
-    text = db.Column(db.String(255), unique=False)
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+    return db
 
-    def __init__(self, author, text):
-        self.author = author
-        self.text = text
 
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 
 
 def find_quote_by_id(quote_id):
