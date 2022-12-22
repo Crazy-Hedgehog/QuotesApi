@@ -5,11 +5,11 @@ from flask_migrate import Migrate
 from sqlalchemy.sql.expression import func
 
 BASE_DIR = Path(__file__).parent
-DATABASE = BASE_DIR / "main_new.db"
+DATABASE = BASE_DIR / "main.db"
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR / 'main_new.db'}"
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR / 'main.db'}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.app_context().push()
 
@@ -17,34 +17,22 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 
-class AuthorModel(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(32), unique=True)
-    quotes = db.relationship('QuoteModel', backref='author', lazy='dynamic', cascade="all, delete-orphan")
-
-    def __init__(self, name):
-        self.name = name
-
-    def to_dict(self):
-        return {"id": self.id,
-                "name": self.name
-                }
-
-
 class QuoteModel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    author_id = db.Column(db.Integer, db.ForeignKey(AuthorModel.id))
+    author = db.Column(db.String(32), unique=False)
     text = db.Column(db.String(255), unique=False)
+    rate = db.Column(db.Integer)
 
-    def __init__(self, author, text):
-        self.author_id = author.id
+    def __init__(self, author, text, rate=1):
+        self.author = author
         self.text = text
+        self.rate = rate if 0 < rate < 6 else 1
+
+    def __repr__(self):
+        return f"Quote author: {self.author}, text: {self.text}"
 
     def to_dict(self):
-        return {"id": self.id,
-                "author": self.author.to_dict(),
-                "tex": self.text
-                }
+        return {col.name: getattr(self, col.name) for col in self.__table__.columns}
 
 
 def some_quotes_to_dict(quotes):
@@ -53,12 +41,6 @@ def some_quotes_to_dict(quotes):
         quotes_dict.append(quote.to_dict())
     return quotes_dict
 
-
-# AUTHOR handlers
-
-
-
-# QUOTES handlers
 
 @app.route('/quotes')
 def get_quotes():
@@ -131,4 +113,4 @@ def search():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+   app.run(debug=True)
